@@ -1,0 +1,4 @@
+confluent_kafka
+supabase
+python-dotenv
+msgpack

@@ -1,0 +1,67 @@
+services:
+  # REST API Service
+  rest-api:
+    build: ./rest-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env
+    depends_on:
+      - mysql
+      - redpanda
+    networks:
+      - app-network
+
+  # Python Consumer Service
+  consumer:
+    build: ./consumer
+    env_file:
+      - ./.env
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DB}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - app-network
+
+  # Redpanda (Kafka)
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092,OUTSIDE://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
